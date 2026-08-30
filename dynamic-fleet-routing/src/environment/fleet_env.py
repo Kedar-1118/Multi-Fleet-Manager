@@ -583,9 +583,19 @@ class DynamicFleetEnv(gym.Env):
         request_id = event.data["request_id"]
         phase = event.data.get("phase", "pickup")
         vehicle = self.vehicles[vehicle_id]
+        request = self.requests.get(request_id)
+
+        # Guard: if request was expired/cancelled while vehicle was en route
+        if request is None or request.status == RequestStatus.EXPIRED:
+            vehicle.current_location = event.data.get(
+                "destination", vehicle.current_location
+            )
+            if vehicle.status != VehicleStatus.IDLE:
+                vehicle.status = VehicleStatus.IDLE
+            vehicle.current_request_id = None
+            return {}
 
         if phase == "pickup":
-            request = self.requests[request_id]
             destination = request.pickup_location
             vehicle.current_location = destination
 
@@ -598,7 +608,6 @@ class DynamicFleetEnv(gym.Env):
             )
 
         elif phase == "dropoff":
-            request = self.requests[request_id]
             destination = request.dropoff_location
             vehicle.current_location = destination
 
@@ -617,7 +626,13 @@ class DynamicFleetEnv(gym.Env):
         vehicle_id = event.data["vehicle_id"]
         request_id = event.data["request_id"]
         vehicle = self.vehicles[vehicle_id]
-        request = self.requests[request_id]
+        request = self.requests.get(request_id)
+
+        # Guard: if request expired while vehicle was servicing
+        if request is None or request.status == RequestStatus.EXPIRED:
+            vehicle.status = VehicleStatus.IDLE
+            vehicle.current_request_id = None
+            return {}
 
         # Load package
         request.mark_picked_up(self.current_time)
@@ -652,7 +667,13 @@ class DynamicFleetEnv(gym.Env):
         vehicle_id = event.data["vehicle_id"]
         request_id = event.data["request_id"]
         vehicle = self.vehicles[vehicle_id]
-        request = self.requests[request_id]
+        request = self.requests.get(request_id)
+
+        # Guard: if request somehow went missing
+        if request is None:
+            vehicle.status = VehicleStatus.IDLE
+            vehicle.current_request_id = None
+            return {}
 
         # Unload package
         request.mark_delivered(self.current_time)
@@ -694,11 +715,11 @@ class DynamicFleetEnv(gym.Env):
 
         # Only expire if still pending or assigned (not picked up/delivered)
         if request.status in {RequestStatus.PENDING, RequestStatus.ASSIGNED}:
-            # If assigned, free the vehicle
+            # If assigned, free the vehicle (bypass status validation for cancellation)
             if request.status == RequestStatus.ASSIGNED and request.assigned_vehicle_id is not None:
                 vehicle = self.vehicles[request.assigned_vehicle_id]
                 if vehicle.current_request_id == request_id:
-                    vehicle.set_status(VehicleStatus.IDLE)
+                    vehicle.status = VehicleStatus.IDLE  # Force reset (any state -> IDLE)
                     vehicle.current_request_id = None
 
             request.mark_expired()

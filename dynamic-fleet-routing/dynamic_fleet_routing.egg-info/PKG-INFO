@@ -1,0 +1,37 @@
+Metadata-Version: 2.4
+Name: dynamic-fleet-routing
+Version: 1.0.0
+Summary: Dynamic Fleet Dispatch & Vehicle Routing Optimization via Deep RL & MCTS
+Author: Fleet Routing Team
+License: MIT
+Keywords: reinforcement-learning,vehicle-routing,mcts,ppo,optimization
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Science/Research
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: pandas>=2.0.0
+Requires-Dist: networkx>=3.1
+Requires-Dist: gymnasium>=0.29.0
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: torch>=2.0.0
+Requires-Dist: stable-baselines3>=2.1.0
+Requires-Dist: sb3-contrib>=2.1.0
+Requires-Dist: ortools>=9.7
+Requires-Dist: mlflow>=2.8.0
+Requires-Dist: fastapi>=0.104.0
+Requires-Dist: uvicorn[standard]>=0.24.0
+Requires-Dist: pydantic>=2.5.0
+Requires-Dist: matplotlib>=3.8.0
+Requires-Dist: seaborn>=0.13.0
+Requires-Dist: tqdm>=4.66.0
+Requires-Dist: python-dotenv>=1.0.0
+Provides-Extra: tuning
+Requires-Dist: ray[tune]>=2.8.0; extra == "tuning"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.1.0; extra == "dev"
+Provides-Extra: all
+Requires-Dist: dynamic-fleet-routing[dev,tuning]; extra == "all"

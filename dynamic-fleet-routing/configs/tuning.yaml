@@ -1,0 +1,46 @@
+# Hyperparameter Tuning Configuration (Ray Tune)
+
+tuning:
+  num_samples: 20                # Number of trials
+  max_concurrent_trials: 2       # Parallel trials
+  metric: "eval/mean_reward"
+  mode: "max"
+  scheduler: "asha"              # AsyncHyperBandScheduler
+  grace_period: 10000
+  reduction_factor: 3
+  training_timesteps: 100000     # Steps per trial
+
+search_space:
+  learning_rate:
+    type: "loguniform"
+    low: 0.00001
+    high: 0.0003
+  gamma:
+    type: "choice"
+    values: [0.95, 0.97, 0.99]
+  gae_lambda:
+    type: "uniform"
+    low: 0.9
+    high: 0.99
+  clip_range:
+    type: "uniform"
+    low: 0.1
+    high: 0.3
+  ent_coef:
+    type: "loguniform"
+    low: 0.00001
+    high: 0.01
+  batch_size:
+    type: "choice"
+    values: [32, 64, 128, 256]
+  n_steps:
+    type: "choice"
+    values: [1024, 2048, 4096]
+  net_arch_size:
+    type: "choice"
+    values: [64, 128, 256]
+
+artifacts:
+  results_dir: "artifacts/tuning"
+  best_config_path: "artifacts/tuning/best_config.yaml"
+  results_csv_path: "artifacts/tuning/tuning_results.csv"

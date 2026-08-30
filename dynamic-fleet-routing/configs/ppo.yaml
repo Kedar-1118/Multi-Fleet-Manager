@@ -1,0 +1,44 @@
+# PPO Training Configuration
+# Inherits from base.yaml
+
+training:
+  total_timesteps: 500000
+  eval_freq: 10000
+  n_eval_episodes: 5
+  save_freq: 25000
+  log_interval: 10
+  n_envs: 4                     # Number of vectorized environments
+
+ppo:
+  learning_rate: 0.0003
+  n_steps: 2048
+  batch_size: 64
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  clip_range_vf: null
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  target_kl: null
+
+policy:
+  net_arch:
+    pi: [256, 256]
+    vf: [256, 256]
+  activation_fn: "ReLU"
+  ortho_init: true
+
+callbacks:
+  early_stopping:
+    patience: 10
+    min_delta: 0.01
+  checkpoint:
+    save_best: true
+    save_final: true
+
+artifacts:
+  model_dir: "artifacts/models"
+  metrics_dir: "artifacts/metrics"
+  plots_dir: "artifacts/plots"

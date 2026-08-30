@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  dispatch-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fleet-dispatch
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_PATH=artifacts/models/final_model.zip
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./configs:/app/configs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.8.0
+    container_name: fleet-mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlruns:/mlflow/mlruns
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:///mlflow/mlflow.db
+      --default-artifact-root /mlflow/mlruns
+    restart: unless-stopped

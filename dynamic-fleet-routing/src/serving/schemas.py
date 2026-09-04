@@ -42,6 +42,7 @@ class DispatchRequest(BaseModel):
     pending_requests: list[RequestSchema]
     traffic_state: TrafficStateEnum = TrafficStateEnum.NORMAL_TRAFFIC
     current_time: float = Field(0.0, description="Current simulation time in minutes")
+    method: str = Field("auto", description="Dispatch method: auto, ppo, hybrid, greedy, nearest, ortools")
 
 
 class DispatchResponse(BaseModel):

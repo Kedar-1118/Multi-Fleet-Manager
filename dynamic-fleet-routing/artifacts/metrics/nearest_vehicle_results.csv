@@ -1,0 +1,4 @@
+total_requests,delivered_requests,expired_requests,total_distance,total_fuel_consumed,avg_turnaround_time,sla_compliance_rate,fleet_utilization,total_reward,avg_inference_latency_ms,requests_per_second,completion_rate
+220,175,45,1420.65,113.652,48.833,0.8171,0.0,-8.794,0.4481,0.0,0.7955
+198,163,34,1450.407,116.033,45.063,0.8773,0.0,-8.414,0.2443,0.0,0.8232
+229,170,57,1384.268,110.741,50.262,0.8412,0.0,-36.813,0.197,0.0,0.7424

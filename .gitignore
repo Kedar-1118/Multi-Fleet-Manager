@@ -1,0 +1,125 @@
+# Byte-compiled / optimized / C-extensions
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage / linting
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+.mypy_cache/
+.pytype/
+.ruff_cache/
+
+# Jupyter Notebooks & checkpoints
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# Virtual Environments
+venv/
+.venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+conda-env/
+
+# MLflow & Experiment Tracking
+mlruns/
+mlartifacts/
+wandb/
+lightning_logs/
+tensorboard/
+
+# ML Checkpoints, Models & Large Artifacts
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.h5
+*.pb
+
+# Project specific generated artifacts and runs
+# (Uncomment below if you wish to ignore all locally generated models/logs/data artifacts)
+artifacts/models/*.zip
+artifacts/logs/*.log
+# artifacts/datasets/*.csv
+# artifacts/metrics/*.csv
+# artifacts/plots/*.png
+
+# Environment Variables & Credentials
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+!.env.template
+
+# Logs & Databases
+*.log
+*.sqlite
+*.sqlite3
+*.db
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/

@@ -152,6 +152,9 @@ class Vehicle:
         Raises:
             ValueError: If the transition is invalid.
         """
+        if self.status == new_status:
+            return
+
         valid_transitions = {
             VehicleStatus.IDLE: {
                 VehicleStatus.MOVING_TO_PICKUP,

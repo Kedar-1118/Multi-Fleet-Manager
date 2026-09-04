@@ -107,14 +107,31 @@ async def dispatch(request: DispatchRequest):
             },
         })
 
-        # Use greedy dispatcher as default
-        from src.baselines.greedy_dispatch import GreedyDispatcher
-        dispatcher = GreedyDispatcher()
-
         env = DynamicFleetEnv(config)
-        env.reset()
+        obs, _ = env.reset()
 
-        action = dispatcher.select_action(env)
+        method = request.method.lower() if hasattr(request, "method") and request.method else "auto"
+        decision_source = "greedy"
+
+        if method in ("ppo", "auto") and _state["model_loaded"] and _state["inference_engine"] is not None:
+            mask = env.get_action_mask()
+            action, _ = _state["inference_engine"].predict(obs, mask)
+            decision_source = "PPO"
+        elif method == "nearest":
+            from src.baselines.nearest_vehicle import NearestVehicleDispatcher
+            dispatcher = NearestVehicleDispatcher()
+            action = dispatcher.select_action(env)
+            decision_source = "nearest"
+        elif method == "ortools":
+            from src.baselines.ortools_vrp import ORToolsVRPDispatcher
+            dispatcher = ORToolsVRPDispatcher(time_limit_ms=500)
+            action = dispatcher.select_action(env)
+            decision_source = "ortools"
+        else:
+            from src.baselines.greedy_dispatch import GreedyDispatcher
+            dispatcher = GreedyDispatcher()
+            action = dispatcher.select_action(env)
+            decision_source = "greedy"
 
         latency_ms = (time.perf_counter() - start) * 1000
         _state["total_dispatches"] += 1
@@ -123,7 +140,6 @@ async def dispatch(request: DispatchRequest):
         noop = action == env.action_space.n - 1
         selected_req = None
         selected_veh = None
-        decision_source = "greedy"
 
         if not noop and len(request.pending_requests) > 0:
             req_idx = action // env.num_vehicles
@@ -132,8 +148,6 @@ async def dispatch(request: DispatchRequest):
                 selected_req = request.pending_requests[req_idx].request_id
             if veh_idx < len(request.vehicles):
                 selected_veh = request.vehicles[veh_idx].vehicle_id
-            if _state["model_loaded"]:
-                decision_source = "PPO"
 
         return DispatchResponse(
             selected_request_id=selected_req,
@@ -168,7 +182,19 @@ async def simulate(request: SimulateRequest):
             dispatcher = GreedyDispatcher()
         elif request.method == "ortools":
             from src.baselines.ortools_vrp import ORToolsVRPDispatcher
-            dispatcher = ORToolsVRPDispatcher()
+            dispatcher = ORToolsVRPDispatcher(time_limit_ms=500)
+        elif request.method == "mcts":
+            from src.planning.mcts import MCTSPlanner
+            dispatcher = MCTSPlanner(num_simulations=20, rollout_horizon=3)
+        elif request.method in ("ppo", "ppo_mcts") and _state["model_loaded"]:
+            from src.agents.ppo_agent import PPOAgent
+            agent = PPOAgent(config=config)
+            agent.model = _state["inference_engine"].sb3_model
+            if request.method == "ppo_mcts":
+                from src.planning.hybrid_planner import HybridPlanner
+                dispatcher = HybridPlanner(agent, num_simulations=20)
+            else:
+                dispatcher = agent
         else:
             from src.baselines.greedy_dispatch import GreedyDispatcher
             dispatcher = GreedyDispatcher()

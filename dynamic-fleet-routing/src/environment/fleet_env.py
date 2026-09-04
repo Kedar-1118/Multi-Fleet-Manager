@@ -585,14 +585,15 @@ class DynamicFleetEnv(gym.Env):
         vehicle = self.vehicles[vehicle_id]
         request = self.requests.get(request_id)
 
-        # Guard: if request was expired/cancelled while vehicle was en route
-        if request is None or request.status == RequestStatus.EXPIRED:
-            vehicle.current_location = event.data.get(
-                "destination", vehicle.current_location
-            )
-            if vehicle.status != VehicleStatus.IDLE:
-                vehicle.status = VehicleStatus.IDLE
-            vehicle.current_request_id = None
+        # Guard: if request was expired/cancelled while vehicle was en route, or stale event
+        if request is None or request.status == RequestStatus.EXPIRED or vehicle.current_request_id != request_id:
+            if vehicle.current_request_id == request_id or vehicle.current_request_id is None:
+                vehicle.current_location = event.data.get(
+                    "destination", vehicle.current_location
+                )
+                if vehicle.status != VehicleStatus.IDLE:
+                    vehicle.status = VehicleStatus.IDLE
+                vehicle.current_request_id = None
             return {}
 
         if phase == "pickup":
@@ -628,10 +629,11 @@ class DynamicFleetEnv(gym.Env):
         vehicle = self.vehicles[vehicle_id]
         request = self.requests.get(request_id)
 
-        # Guard: if request expired while vehicle was servicing
-        if request is None or request.status == RequestStatus.EXPIRED:
-            vehicle.status = VehicleStatus.IDLE
-            vehicle.current_request_id = None
+        # Guard: if request expired while vehicle was servicing, or stale event
+        if request is None or request.status == RequestStatus.EXPIRED or vehicle.current_request_id != request_id:
+            if vehicle.current_request_id == request_id or vehicle.current_request_id is None:
+                vehicle.status = VehicleStatus.IDLE
+                vehicle.current_request_id = None
             return {}
 
         # Load package
@@ -669,10 +671,11 @@ class DynamicFleetEnv(gym.Env):
         vehicle = self.vehicles[vehicle_id]
         request = self.requests.get(request_id)
 
-        # Guard: if request somehow went missing
-        if request is None:
-            vehicle.status = VehicleStatus.IDLE
-            vehicle.current_request_id = None
+        # Guard: if request somehow went missing or stale event
+        if request is None or vehicle.current_request_id != request_id:
+            if vehicle.current_request_id == request_id or vehicle.current_request_id is None:
+                vehicle.status = VehicleStatus.IDLE
+                vehicle.current_request_id = None
             return {}
 
         # Unload package

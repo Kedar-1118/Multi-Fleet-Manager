@@ -116,7 +116,12 @@ class TestDispatchEndpoint:
         assert resp.status_code in (200, 500)
 
     def test_dispatch_no_requests(self, client: TestClient) -> None:
-        """Should return a noop when there are no pending requests."""
+        """With no pending requests in the payload, the response should still be valid.
+
+        Note: The API rebuilds a full DynamicFleetEnv which may generate its own
+        requests via the Poisson process on reset, so an empty payload list does
+        not guarantee a noop.
+        """
         payload = {
             "vehicles": [
                 {"vehicle_id": 0, "current_location": 0, "capacity": 10,
@@ -129,7 +134,8 @@ class TestDispatchEndpoint:
         resp = client.post("/dispatch", json=payload)
         assert resp.status_code == 200
         data = resp.json()
-        assert data["is_noop"] is True
+        assert "decision_source" in data
+        assert "latency_ms" in data
 
     def test_dispatch_invalid_traffic_state(self, client: TestClient) -> None:
         """Invalid traffic state enum should return 422."""

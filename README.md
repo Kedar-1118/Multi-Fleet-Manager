@@ -6,9 +6,9 @@
 [![Stable-Baselines3](https://img.shields.io/badge/SB3-2.1.0-orange.svg)](https://stable-baselines3.readthedocs.io/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104.0-teal.svg)](https://fastapi.tiangolo.com/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://www.docker.com/)
-[![Tests](https://img.shields.io/badge/tests-164%20passed-brightgreen.svg)](dynamic-fleet-routing/tests/)
+[![Tests](https://img.shields.io/badge/tests-200%20passed-brightgreen.svg)](dynamic-fleet-routing/tests/)
 
-A production-grade, hybrid optimization engine combining **Deep Reinforcement Learning (Maskable PPO)**, **Monte Carlo Tree Search (MCTS)**, and **Operations Research (Google OR-Tools CP-SAT)** for dynamic urban logistics, real-time vehicle routing, and high-density fleet dispatching under stochastic traffic and strict SLA deadlines.
+A production-grade, hybrid optimization engine combining **Deep Reinforcement Learning (Maskable PPO)**, **Monte Carlo Tree Search (MCTS)**, and **Operations Research (Google OR-Tools CP-SAT)** for dynamic urban logistics, electric vehicle routing (E-DVRPTW), carbon emissions minimization, and high-density fleet dispatching under stochastic traffic and strict SLA deadlines.
 
 ---
 

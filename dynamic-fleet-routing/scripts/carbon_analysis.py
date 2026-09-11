@@ -129,16 +129,16 @@ def main() -> None:
     print("=" * 80)
     print(f"  Episodes per method: {args.episodes}")
     print(f"  Simulation duration: 24 hours (1440 min)")
-    print(f"  EV emission factor:  {emissions_calc.ev_co2_per_kwh} kg CO₂/kWh")
-    print(f"  ICE emission factor: {emissions_calc.ice_co2_per_km} kg CO₂/km")
+    print(f"  EV emission factor:  {emissions_calc.ev_co2_per_kwh} kg CO2/kWh")
+    print(f"  ICE emission factor: {emissions_calc.ice_co2_per_km} kg CO2/km")
     print("=" * 80)
 
     results: list[dict[str, Any]] = []
 
     for method_name, dispatcher in dispatchers.items():
-        print(f"\n{'─' * 60}")
+        print(f"\n{'-' * 60}")
         print(f"  Evaluating: {method_name}")
-        print(f"{'─' * 60}")
+        print(f"{'-' * 60}")
 
         ep_results = []
         for ep in range(args.episodes):
@@ -187,10 +187,10 @@ def main() -> None:
 
     header = (
         f"{'Method':<20} | {'Completion':>10} | {'SLA':>8} | {'Distance':>10} | "
-        f"{'Energy':>10} | {'EV CO₂':>9} | {'ICE CO₂':>9} | {'Saved':>9} | {'Reduction':>10}"
+        f"{'Energy':>10} | {'EV CO2':>9} | {'ICE CO2':>9} | {'Saved':>9} | {'Reduction':>10}"
     )
     print(header)
-    print("─" * 100)
+    print("-" * 100)
 
     for r in results:
         row = (
@@ -241,7 +241,7 @@ def main() -> None:
                          color="#2ecc71", alpha=0.85, edgecolor="white")
 
         ax.set_xlabel("Dispatch Method", fontsize=12, fontweight="bold")
-        ax.set_ylabel("CO₂ Emissions (kg)", fontsize=12, fontweight="bold")
+        ax.set_ylabel("CO2 Emissions (kg)", fontsize=12, fontweight="bold")
         ax.set_title("Carbon Emissions: EV Fleet vs ICE Baseline\n(24-Hour Urban Logistics Simulation)",
                      fontsize=14, fontweight="bold")
         ax.set_xticks(x)

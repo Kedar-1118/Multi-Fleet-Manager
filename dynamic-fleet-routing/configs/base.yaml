@@ -34,6 +34,14 @@ vehicles:
   service_time_minutes: 5        # Time to pick up or drop off
   initial_fuel: 100.0            # Starting fuel
 
+ev:
+  battery_capacity_kwh: 60.0     # Battery capacity in kWh
+  energy_consumption_kwh_per_km: 0.15  # Energy per km
+  charging_power_kw: 50.0        # Fast-charger power in kW
+  low_soc_threshold: 0.2         # SoC below which vehicle needs charging
+  num_charging_stations: 3       # Charging depot nodes in city graph
+  charging_time_minutes: 15.0    # Fixed charging session duration
+
 requests:
   lambda_rate: 5                 # Poisson arrival rate per interval
   arrival_interval: 30           # Minutes between arrival batches
@@ -55,6 +63,8 @@ reward:
   idle_penalty: 0.05             # ε - per-minute idle cost
   utilization_reward: 1.0        # ζ - vehicle utilization bonus
   expiry_penalty: 15.0           # Penalty for expired requests
+  carbon_penalty: 0.3            # θ - CO₂ emissions per kWh
+  low_battery_penalty: 5.0       # κ - penalty for low-SoC vehicles
   normalize: true                # Apply reward normalization
   normalization_window: 100      # Window for running stats
 

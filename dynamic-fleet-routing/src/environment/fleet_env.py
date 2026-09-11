@@ -34,6 +34,7 @@ class EventType(Enum):
     DROPOFF_COMPLETE = "DROPOFF_COMPLETE"
     TRAFFIC_CHANGE = "TRAFFIC_CHANGE"
     REQUEST_EXPIRATION = "REQUEST_EXPIRATION"
+    CHARGING_COMPLETE = "CHARGING_COMPLETE"
 
 
 @dataclass
@@ -112,12 +113,22 @@ class DynamicFleetEnv(gym.Env):
         self._service_time: float = veh_cfg.get("service_time_minutes", 5.0)
         self._initial_fuel: float = veh_cfg.get("initial_fuel", 100.0)
 
+        # EV parameters
+        ev_cfg = config.get("ev", {})
+        self._battery_capacity_kwh: float = ev_cfg.get("battery_capacity_kwh", 60.0)
+        self._energy_rate: float = ev_cfg.get("energy_consumption_kwh_per_km", 0.15)
+        self._charging_power_kw: float = ev_cfg.get("charging_power_kw", 50.0)
+        self._low_soc_threshold: float = ev_cfg.get("low_soc_threshold", 0.2)
+        self._charging_time_minutes: float = ev_cfg.get("charging_time_minutes", 15.0)
+        self._num_charging_stations: int = ev_cfg.get("num_charging_stations", 3)
+
         # Build city graph
         graph_config = CityGraphConfig(
             num_nodes=self._num_nodes,
             grid_size=city_cfg.get("grid_size", 10.0),
             edge_density=city_cfg.get("edge_density", 0.15),
             base_speed_kmh=city_cfg.get("base_speed_kmh", 30.0),
+            num_charging_stations=self._num_charging_stations,
             seed=self._seed,
         )
         self.city_graph = CityGraph(graph_config)
@@ -166,6 +177,8 @@ class DynamicFleetEnv(gym.Env):
             idle_penalty=reward_cfg.get("idle_penalty", 0.05),
             utilization_reward=reward_cfg.get("utilization_reward", 1.0),
             expiry_penalty=reward_cfg.get("expiry_penalty", 15.0),
+            carbon_penalty=reward_cfg.get("carbon_penalty", 0.3),
+            low_battery_penalty=reward_cfg.get("low_battery_penalty", 5.0),
             normalize=reward_cfg.get("normalize", True),
             normalization_window=reward_cfg.get("normalization_window", 100),
         )
@@ -186,6 +199,8 @@ class DynamicFleetEnv(gym.Env):
         self._total_sla_violations: int = 0
         self._total_on_time: int = 0
         self._cumulative_reward: float = 0.0
+        self._total_energy_consumed_kwh: float = 0.0
+        self._vehicles_stranded: int = 0
         self._last_reward_breakdown: Optional[RewardBreakdown] = None
 
         # Define action and observation spaces
@@ -235,6 +250,8 @@ class DynamicFleetEnv(gym.Env):
         self._total_sla_violations = 0
         self._total_on_time = 0
         self._cumulative_reward = 0.0
+        self._total_energy_consumed_kwh = 0.0
+        self._vehicles_stranded = 0
         self.requests = {}
         self.pending_requests = []
 
@@ -252,6 +269,9 @@ class DynamicFleetEnv(gym.Env):
                 current_location=start_loc,
                 capacity=self._vehicle_capacity,
                 fuel_remaining=self._initial_fuel,
+                battery_capacity_kwh=self._battery_capacity_kwh,
+                battery_level_kwh=self._battery_capacity_kwh,
+                energy_consumption_kwh_per_km=self._energy_rate,
             )
             self.vehicles.append(v)
 
@@ -331,8 +351,9 @@ class DynamicFleetEnv(gym.Env):
                 vehicle.current_location, request.pickup_location, traffic_mult
             )
 
-            # Consume fuel for pickup travel
+            # Consume fuel and battery energy for pickup travel
             vehicle.consume_fuel(pickup_dist, self._fuel_rate)
+            energy_used = vehicle.consume_energy(pickup_dist)
             step_distance += pickup_dist
             step_fuel += pickup_dist * self._fuel_rate
 
@@ -365,13 +386,23 @@ class DynamicFleetEnv(gym.Env):
 
         # Calculate fleet utilization
         active_vehicles = sum(
-            1 for v in self.vehicles if v.status != VehicleStatus.IDLE
+            1 for v in self.vehicles
+            if v.status not in (VehicleStatus.IDLE, VehicleStatus.CHARGING)
         )
         fleet_utilization = active_vehicles / max(self._num_vehicles, 1)
 
         # Calculate idle time
-        idle_vehicles = self._num_vehicles - active_vehicles
+        idle_vehicles = sum(
+            1 for v in self.vehicles if v.status == VehicleStatus.IDLE
+        )
         idle_time = idle_vehicles * 1.0  # 1 minute per idle vehicle per step
+
+        # EV metrics for this step
+        step_energy = sum(v.total_energy_consumed_kwh for v in self.vehicles) - self._total_energy_consumed_kwh
+        vehicles_low_battery = sum(
+            1 for v in self.vehicles if v.needs_charging(self._low_soc_threshold)
+        )
+        self._total_energy_consumed_kwh = sum(v.total_energy_consumed_kwh for v in self.vehicles)
 
         # Calculate reward
         breakdown = self.reward_calculator.calculate(
@@ -383,6 +414,8 @@ class DynamicFleetEnv(gym.Env):
             fleet_utilization=fleet_utilization,
             requests_expired=step_expired,
             on_time_deliveries=step_on_time,
+            energy_consumed_kwh=max(step_energy, 0.0),
+            vehicles_below_threshold=vehicles_low_battery,
         )
         self._last_reward_breakdown = breakdown
         self._cumulative_reward += breakdown.total_reward
@@ -552,6 +585,9 @@ class DynamicFleetEnv(gym.Env):
         elif event.event_type == EventType.REQUEST_EXPIRATION:
             result = self._handle_request_expiration(event)
 
+        elif event.event_type == EventType.CHARGING_COMPLETE:
+            result = self._handle_charging_complete(event)
+
         return result
 
     def _handle_new_requests(self, event: SimEvent) -> dict[str, Any]:
@@ -654,6 +690,7 @@ class DynamicFleetEnv(gym.Env):
         )
 
         vehicle.consume_fuel(dropoff_dist, self._fuel_rate)
+        vehicle.consume_energy(dropoff_dist)
 
         self._schedule_event(
             self.current_time + dropoff_travel_time,
@@ -734,6 +771,21 @@ class DynamicFleetEnv(gym.Env):
 
         return {}
 
+    def _handle_charging_complete(self, event: SimEvent) -> dict[str, Any]:
+        """Handle completion of a vehicle charging session."""
+        vehicle_id = event.data["vehicle_id"]
+        vehicle = self.vehicles[vehicle_id]
+
+        if vehicle.status != VehicleStatus.CHARGING:
+            return {}
+
+        # Charge the battery: fixed-duration model charges to ~80% capacity
+        charge_energy = self._battery_capacity_kwh * 0.6  # 20% -> 80%
+        vehicle.charge_battery(charge_energy)
+        vehicle.set_status(VehicleStatus.IDLE)
+
+        return {}
+
     def _get_observation(self) -> np.ndarray:
         """Build the fixed-size observation vector.
 
@@ -795,8 +847,8 @@ class DynamicFleetEnv(gym.Env):
                 obs[idx] = nx
                 obs[idx + 1] = ny
                 obs[idx + 2] = v.utilization
-                obs[idx + 3] = float(v.status != VehicleStatus.IDLE)
-                obs[idx + 4] = 0.0  # placeholder for route time estimate
+                obs[idx + 3] = float(v.status not in (VehicleStatus.IDLE, VehicleStatus.CHARGING))
+                obs[idx + 4] = v.battery_soc  # Battery State-of-Charge
                 obs[idx + 5] = v.fuel_remaining / self._initial_fuel
             idx += self._vehicle_feat_size
 
@@ -827,6 +879,10 @@ class DynamicFleetEnv(gym.Env):
         Returns:
             Dictionary with simulation state information.
         """
+        total_energy = sum(v.total_energy_consumed_kwh for v in self.vehicles)
+        # CO₂ emissions: US grid average 0.233 kg CO₂ per kWh
+        total_co2_kg = total_energy * 0.233
+
         return {
             "current_time": self.current_time,
             "step": self._step_count,
@@ -839,9 +895,19 @@ class DynamicFleetEnv(gym.Env):
             "cumulative_reward": self._cumulative_reward,
             "traffic_state": self.traffic_model.get_state_name(),
             "fleet_utilization": sum(
-                1 for v in self.vehicles if v.status != VehicleStatus.IDLE
+                1 for v in self.vehicles
+                if v.status not in (VehicleStatus.IDLE, VehicleStatus.CHARGING)
             ) / max(self._num_vehicles, 1),
             "action_mask": self.get_action_mask(),
+            "total_energy_kwh": round(total_energy, 3),
+            "total_co2_kg": round(total_co2_kg, 3),
+            "avg_battery_soc": round(
+                float(np.mean([v.battery_soc for v in self.vehicles])), 3
+            ),
+            "vehicles_low_battery": sum(
+                1 for v in self.vehicles
+                if v.needs_charging(self._low_soc_threshold)
+            ),
         }
 
     # === State cloning for MCTS ===
@@ -870,6 +936,8 @@ class DynamicFleetEnv(gym.Env):
             "total_sla_violations": self._total_sla_violations,
             "total_on_time": self._total_on_time,
             "cumulative_reward": self._cumulative_reward,
+            "total_energy_consumed_kwh": self._total_energy_consumed_kwh,
+            "vehicles_stranded": self._vehicles_stranded,
             "traffic_model": self.traffic_model.clone(),
             "rng_state": self._rng.get_state(),
         }
@@ -894,6 +962,8 @@ class DynamicFleetEnv(gym.Env):
         self._total_sla_violations = state["total_sla_violations"]
         self._total_on_time = state["total_on_time"]
         self._cumulative_reward = state["cumulative_reward"]
+        self._total_energy_consumed_kwh = state.get("total_energy_consumed_kwh", 0.0)
+        self._vehicles_stranded = state.get("vehicles_stranded", 0)
         self.traffic_model = state["traffic_model"].clone()
         self._rng.set_state(state["rng_state"])
 

@@ -34,6 +34,7 @@ class CityGraphConfig:
     min_edge_weight: float = 1.0
     max_edge_weight: float = 5.0
     base_speed_kmh: float = 30.0
+    num_charging_stations: int = 3
     seed: int = 42
 
 
@@ -59,10 +60,12 @@ class CityGraph:
         self.config = config or CityGraphConfig()
         self.graph: nx.Graph = nx.Graph()
         self.node_positions: dict[int, tuple[float, float]] = {}
+        self.charging_stations: list[int] = []
         self._rng = np.random.RandomState(self.config.seed)
         self._shortest_path_cache: dict[tuple[int, int], list[int]] = {}
         self._distance_cache: dict[tuple[int, int], float] = {}
         self._build_graph()
+        self._designate_charging_stations()
 
     def _build_graph(self) -> None:
         """Construct the city graph with nodes, edges, and weights."""
@@ -291,3 +294,85 @@ class CityGraph:
         """Clear shortest path and distance caches."""
         self._shortest_path_cache.clear()
         self._distance_cache.clear()
+
+    def _designate_charging_stations(self) -> None:
+        """Designate spatially-distributed nodes as EV charging stations.
+
+        Uses a greedy farthest-point strategy to ensure charging stations
+        are spread across the city rather than clustered together.
+        """
+        n_stations = min(
+            self.config.num_charging_stations, self.config.num_nodes
+        )
+        if n_stations <= 0:
+            return
+
+        nodes = list(self.graph.nodes)
+        # Start with the node closest to the city center
+        center = (self.config.grid_size / 2, self.config.grid_size / 2)
+        first = min(
+            nodes,
+            key=lambda n: math.sqrt(
+                (self.node_positions[n][0] - center[0]) ** 2
+                + (self.node_positions[n][1] - center[1]) ** 2
+            ),
+        )
+        self.charging_stations = [first]
+        self.graph.nodes[first]["is_charging_station"] = True
+
+        # Greedily add the farthest node from all existing stations
+        for _ in range(n_stations - 1):
+            best_node = -1
+            best_min_dist = -1.0
+            for n in nodes:
+                if n in self.charging_stations:
+                    continue
+                min_dist = min(
+                    self._euclidean_distance(n, s)
+                    for s in self.charging_stations
+                )
+                if min_dist > best_min_dist:
+                    best_min_dist = min_dist
+                    best_node = n
+            if best_node >= 0:
+                self.charging_stations.append(best_node)
+                self.graph.nodes[best_node]["is_charging_station"] = True
+
+    def is_charging_station(self, node: int) -> bool:
+        """Check if a node is a designated charging station.
+
+        Args:
+            node: Node ID.
+
+        Returns:
+            True if the node is a charging station.
+        """
+        return node in self.charging_stations
+
+    def get_nearest_charging_station(
+        self, node: int
+    ) -> tuple[int, float]:
+        """Find the nearest charging station to a given node.
+
+        Args:
+            node: Source node ID.
+
+        Returns:
+            Tuple of (station_node_id, distance_km).
+
+        Raises:
+            ValueError: If no charging stations are configured.
+        """
+        if not self.charging_stations:
+            raise ValueError("No charging stations configured in the city graph.")
+
+        best_station = self.charging_stations[0]
+        best_dist = self.get_shortest_distance(node, best_station)
+
+        for station in self.charging_stations[1:]:
+            dist = self.get_shortest_distance(node, station)
+            if dist < best_dist:
+                best_dist = dist
+                best_station = station
+
+        return best_station, best_dist

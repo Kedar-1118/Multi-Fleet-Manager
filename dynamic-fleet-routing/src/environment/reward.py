@@ -35,6 +35,8 @@ class RewardConfig:
     idle_penalty: float = 0.05
     utilization_reward: float = 1.0
     expiry_penalty: float = 15.0
+    carbon_penalty: float = 0.3
+    low_battery_penalty: float = 5.0
     normalize: bool = True
     normalization_window: int = 100
 
@@ -60,6 +62,8 @@ class RewardBreakdown:
     idle_penalty: float = 0.0
     utilization_reward: float = 0.0
     expiry_penalty: float = 0.0
+    carbon_penalty: float = 0.0
+    low_battery_penalty: float = 0.0
     total_reward: float = 0.0
 
     def to_dict(self) -> dict[str, float]:
@@ -72,6 +76,8 @@ class RewardBreakdown:
             "idle_penalty": round(self.idle_penalty, 4),
             "utilization_reward": round(self.utilization_reward, 4),
             "expiry_penalty": round(self.expiry_penalty, 4),
+            "carbon_penalty": round(self.carbon_penalty, 4),
+            "low_battery_penalty": round(self.low_battery_penalty, 4),
             "total_reward": round(self.total_reward, 4),
         }
 
@@ -109,6 +115,8 @@ class RewardCalculator:
         fleet_utilization: float = 0.0,
         requests_expired: int = 0,
         on_time_deliveries: int = 0,
+        energy_consumed_kwh: float = 0.0,
+        vehicles_below_threshold: int = 0,
     ) -> RewardBreakdown:
         """Calculate the total reward and its components.
 
@@ -121,6 +129,8 @@ class RewardCalculator:
             fleet_utilization: Average fleet utilization (0-1).
             requests_expired: Number of requests expired this step.
             on_time_deliveries: Number of on-time deliveries this step.
+            energy_consumed_kwh: Battery energy consumed this step (kWh).
+            vehicles_below_threshold: Count of vehicles below low-SoC threshold.
 
         Returns:
             RewardBreakdown with all components and total.
@@ -151,6 +161,12 @@ class RewardCalculator:
         breakdown.expiry_penalty = -(
             self.config.expiry_penalty * requests_expired
         )
+        breakdown.carbon_penalty = -(
+            self.config.carbon_penalty * energy_consumed_kwh
+        )
+        breakdown.low_battery_penalty = -(
+            self.config.low_battery_penalty * vehicles_below_threshold
+        )
 
         # Total reward
         total = (
@@ -161,6 +177,8 @@ class RewardCalculator:
             + breakdown.idle_penalty
             + breakdown.utilization_reward
             + breakdown.expiry_penalty
+            + breakdown.carbon_penalty
+            + breakdown.low_battery_penalty
         )
 
         # Apply normalization if enabled

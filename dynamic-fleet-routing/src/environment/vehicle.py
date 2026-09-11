@@ -17,6 +17,7 @@ class VehicleStatus(Enum):
     MOVING_TO_PICKUP = "MOVING_TO_PICKUP"
     MOVING_TO_DROPOFF = "MOVING_TO_DROPOFF"
     SERVICING = "SERVICING"
+    CHARGING = "CHARGING"
 
 
 @dataclass
@@ -37,6 +38,10 @@ class Vehicle:
         fuel_remaining: Remaining fuel units.
         busy_until: Simulation time when vehicle becomes available.
         current_request_id: ID of the request currently being serviced.
+        battery_capacity_kwh: Maximum battery capacity in kWh (EV model).
+        battery_level_kwh: Current battery charge level in kWh.
+        energy_consumption_kwh_per_km: Energy consumed per km driven.
+        total_energy_consumed_kwh: Cumulative energy consumed since start.
     """
     vehicle_id: int
     current_location: int
@@ -51,6 +56,10 @@ class Vehicle:
     fuel_remaining: float = 100.0
     busy_until: float = 0.0
     current_request_id: Optional[int] = None
+    battery_capacity_kwh: float = 60.0
+    battery_level_kwh: float = 60.0
+    energy_consumption_kwh_per_km: float = 0.15
+    total_energy_consumed_kwh: float = 0.0
 
     @property
     def capacity_remaining(self) -> int:
@@ -68,6 +77,64 @@ class Vehicle:
         if self.capacity == 0:
             return 0.0
         return self.current_load / self.capacity
+
+    @property
+    def battery_soc(self) -> float:
+        """Return battery State-of-Charge as a fraction (0.0 to 1.0)."""
+        if self.battery_capacity_kwh <= 0:
+            return 0.0
+        return min(self.battery_level_kwh / self.battery_capacity_kwh, 1.0)
+
+    def needs_charging(self, threshold: float = 0.2) -> bool:
+        """Check if the vehicle's battery is below the charging threshold.
+
+        Args:
+            threshold: SoC fraction below which charging is needed (0.0–1.0).
+
+        Returns:
+            True if battery SoC is below the threshold.
+        """
+        return self.battery_soc < threshold
+
+    def consume_energy(self, distance_km: float) -> float:
+        """Consume battery energy for a given distance traveled.
+
+        Args:
+            distance_km: Distance traveled in kilometers.
+
+        Returns:
+            Energy consumed in kWh.
+
+        Raises:
+            ValueError: If distance is negative.
+        """
+        if distance_km < 0:
+            raise ValueError(f"Distance cannot be negative: {distance_km}")
+        energy_used = distance_km * self.energy_consumption_kwh_per_km
+        self.battery_level_kwh = max(0.0, self.battery_level_kwh - energy_used)
+        self.total_energy_consumed_kwh += energy_used
+        return energy_used
+
+    def charge_battery(self, energy_kwh: float) -> float:
+        """Recharge the vehicle's battery.
+
+        Args:
+            energy_kwh: Energy to add in kWh.
+
+        Returns:
+            Actual energy added (capped at capacity).
+
+        Raises:
+            ValueError: If energy_kwh is negative.
+        """
+        if energy_kwh < 0:
+            raise ValueError(f"Charge energy cannot be negative: {energy_kwh}")
+        previous = self.battery_level_kwh
+        self.battery_level_kwh = min(
+            self.battery_capacity_kwh,
+            self.battery_level_kwh + energy_kwh,
+        )
+        return self.battery_level_kwh - previous
 
     def can_accept_package(self, package_size: int) -> bool:
         """Check if vehicle can accommodate a package of given size.
@@ -158,6 +225,7 @@ class Vehicle:
         valid_transitions = {
             VehicleStatus.IDLE: {
                 VehicleStatus.MOVING_TO_PICKUP,
+                VehicleStatus.CHARGING,
                 VehicleStatus.IDLE,
             },
             VehicleStatus.MOVING_TO_PICKUP: {
@@ -170,6 +238,9 @@ class Vehicle:
             },
             VehicleStatus.MOVING_TO_DROPOFF: {
                 VehicleStatus.SERVICING,  # For pickup at same location
+                VehicleStatus.IDLE,
+            },
+            VehicleStatus.CHARGING: {
                 VehicleStatus.IDLE,
             },
         }
@@ -202,6 +273,10 @@ class Vehicle:
             fuel_remaining=self.fuel_remaining,
             busy_until=self.busy_until,
             current_request_id=self.current_request_id,
+            battery_capacity_kwh=self.battery_capacity_kwh,
+            battery_level_kwh=self.battery_level_kwh,
+            energy_consumption_kwh_per_km=self.energy_consumption_kwh_per_km,
+            total_energy_consumed_kwh=self.total_energy_consumed_kwh,
         )
 
     def reset(self, start_location: int, fuel: float = 100.0) -> None:
@@ -222,3 +297,5 @@ class Vehicle:
         self.fuel_remaining = fuel
         self.busy_until = 0.0
         self.current_request_id = None
+        self.battery_level_kwh = self.battery_capacity_kwh
+        self.total_energy_consumed_kwh = 0.0
